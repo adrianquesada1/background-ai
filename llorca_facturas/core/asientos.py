@@ -13,7 +13,8 @@ def cuentas(con) -> dict:
             "ret_garantia": db.get_setting(con, "cta_ret_garantia_prov", "4009")}
 
 
-def proponer(con, desde: str | None = None, hasta: str | None = None, obra_id: int | None = None, solo_no_exportadas: bool = False) -> list[dict]:
+def proponer(con, desde: str | None = None, hasta: str | None = None, obra_id: int | None = None, solo_no_exportadas: bool = False,
+             doc_ids: list[int] | None = None) -> list[dict]:
     cta = cuentas(con)
     q = """SELECT d.*, COALESCE(pr.nombre, d.emisor_nombre) AS prov, o.codigo AS obra FROM documentos d
            LEFT JOIN proveedores pr ON pr.id=d.proveedor_id LEFT JOIN obras o ON o.id=d.obra_id
@@ -25,6 +26,12 @@ def proponer(con, desde: str | None = None, hasta: str | None = None, obra_id: i
         q += " AND d.fecha<=?"; p.append(hasta)
     if obra_id:
         q += " AND d.obra_id=?"; p.append(obra_id)
+    if doc_ids is not None:
+        if not doc_ids:
+            return []
+        q += f" AND d.id IN ({','.join('?' * len(doc_ids))})"; p.extend(doc_ids)
+    if solo_no_exportadas:
+        q += " AND d.id NOT IN (SELECT documento_id FROM sis_envios WHERE estado IN ('enviado','desfasado'))"
     filas = []
     for n, d in enumerate(db.rows(con, q + " ORDER BY d.fecha, d.id", p), 1):
         base = Decimal(d["base_imponible_cents"] or 0) / 100

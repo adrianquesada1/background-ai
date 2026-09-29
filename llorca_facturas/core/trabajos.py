@@ -149,6 +149,11 @@ def _procesar_item(con, trabajo: dict, item: dict) -> None:
     res = lector.leer(con, Path(doc["file_path"]).read_bytes(), obras, partidas, _api_key(con),
                       db.get_setting(con, "modelo", "claude-sonnet-5"), cfg, provs, doc["filename"])
     ingesta.aplicar_extraccion(con, doc["id"], res, trabajo["creado_por"] or "sistema", obra_defecto=trabajo["obra_lote"])
+    try:                                   # CIF solo en el logotipo o escaneado: proveedor por remitente del correo / IBAN
+        from . import buzon
+        buzon.completar_por_remitente(con, doc["id"])
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
     d = db.one(con, "SELECT emisor_nombre, numero, base_imponible_cents, estado, confianza FROM documentos WHERE id=?", (doc["id"],))
     graves = db.one(con, "SELECT COUNT(*) n FROM incidencias WHERE documento_id=? AND resuelta=0 AND severidad IN ('critica','alta')",
                     (doc["id"],))["n"]

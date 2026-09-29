@@ -694,4 +694,14 @@ def devengado_pendiente(con, obra_id: int | None = None, hasta: str | None = Non
         if not fac:
             out.append({"id": d["id"], "tipo": d["tipo_documento"], "proveedor": d["proveedor"], "nif": d["emisor_nif"],
                         "numero": d["numero"], "fecha": d["fecha"], "base_c": d["base_c"], "obra_id": d["obra_id"]})
+    try:                     # certificaciones propias al subcontratista aprobadas y aún sin factura
+        from . import cert_proveedor
+        cert_proveedor.casar_facturas(con, obra_id)
+        for c in cert_proveedor.aprobadas_sin_factura(con, obra_id):
+            if hasta and (c["fecha"] or c["periodo"] + "-01") > hasta:
+                continue
+            out.append({"id": None, "tipo": "cert_propia", "proveedor": c["proveedor"], "nif": None, "numero": f"CP {c['numero']} ({c['periodo']})",
+                        "fecha": c["fecha"], "base_c": c["base_mes_cents"], "obra_id": c["obra_id"]})
+    except Exception:  # noqa: BLE001
+        pass
     return out

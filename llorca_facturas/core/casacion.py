@@ -40,8 +40,14 @@ def casar(con, obra_id: int | None = None) -> list[dict]:
     certs = {}
     for r in db.rows(con, """SELECT id, obra_id, proveedor_id, emisor_nif, numero, fecha, base_imponible_cents AS base_c FROM documentos
                              WHERE tipo_documento='certificacion' AND estado NOT IN ('rechazada','eliminado','duplicado')
-                             AND COALESCE(texto,'') NOT LIKE '%\%OR%' ESCAPE '\\'"""):
+                             AND COALESCE(texto,'') NOT LIKE '%\\%OR%' ESCAPE '\\'"""):
         certs.setdefault((r["obra_id"], r["proveedor_id"]), []).append(r)
+    try:                     # certificaciones emitidas por Llorca al subcontratista (autorización de facturación)
+        for r in db.rows(con, """SELECT id, obra_id, proveedor_id, numero, COALESCE(fecha, periodo || '-28') AS fecha, base_mes_cents AS base_c
+                                 FROM certs_proveedor WHERE estado IN ('aprobada','facturada') AND proveedor_id IS NOT NULL"""):
+            certs.setdefault((r["obra_id"], r["proveedor_id"]), []).insert(0, {**r, "id": f"cp{r['id']}", "numero": f"{r['numero']} (propia)"})
+    except Exception:  # noqa: BLE001 - base de datos sin el módulo de certificación a proveedor
+        pass
     acumulado, usadas, out = {}, set(), []
     for f in facturas:
         clave = (f["obra_id"], f["proveedor_id"])

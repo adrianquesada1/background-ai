@@ -58,7 +58,15 @@ def candidatas(con, hasta: str | None = None, obra_id: int | None = None) -> lis
         if d["proveedor_id"] and iban and db.one(con, "SELECT 1 x FROM proveedor_ibans WHERE proveedor_id=? AND iban=? AND COALESCE(verificado,0)=0 "
                                                       "AND (SELECT COUNT(*) FROM proveedor_ibans WHERE proveedor_id=?)>1", (d["proveedor_id"], iban, d["proveedor_id"])):
             motivos.append("el proveedor tiene varias cuentas y esta no está verificada")
-        out.append({**d, "iban_n": iban, "bloqueos": motivos})
+        avisos = []
+        try:                 # art. 43.1.f LGT: subcontrata sin certificado de estar al corriente con Hacienda
+            from . import prevencion
+            if d["proveedor_id"] and prevencion.aeat_caducado(con, d["proveedor_id"]):
+                txt = "certificado de estar al corriente con la AEAT caducado o no aportado (art. 43.1.f LGT)"
+                (motivos if db.get_setting(con, "pagos_bloquear_aeat", "0") == "1" else avisos).append(txt)
+        except Exception:  # noqa: BLE001
+            pass
+        out.append({**d, "iban_n": iban, "bloqueos": motivos, "avisos": avisos})
     return out
 
 
@@ -84,6 +92,10 @@ def generar(con, ids: list[int], fecha_ejecucion: str, usuario: str, rol: str) -
         raise ValueError("No hay facturas válidas seleccionadas.")
     total = sum(c["total_a_pagar_cents"] for c in sel)
     ref = f"REM{datetime.now():%Y%m%d%H%M%S}"
+    n = 1
+    while db.one(con, "SELECT 1 x FROM remesas WHERE referencia=?", (ref,)):     # dos remesas en el mismo segundo
+        n += 1
+        ref = f"REM{datetime.now():%Y%m%d%H%M%S}-{n}"
     ahora = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     E = lambda c: f"{Decimal(c) / 100:.2f}"  # noqa: E731
     pagos = "".join(f"""
@@ -119,12 +131,21 @@ def generar(con, ids: list[int], fecha_ejecucion: str, usuario: str, rol: str) -
 
 
 def confirmar(con, rid: int, fecha_pago: str, usuario: str) -> int:
+    r = db.one(con, "SELECT estado FROM remesas WHERE id=?", (rid,))
+    if not r or r["estado"] != "generada":
+        raise ValueError("La remesa no está pendiente de confirmar (ya pagada o anulada).")
     items = db.rows(con, "SELECT documento_id FROM remesa_items WHERE remesa_id=?", (rid,))
     with db.tx(con):
         for it in items:
             con.execute("UPDATE documentos SET pagada=1, fecha_pago=? WHERE id=?", (fecha_pago, it["documento_id"]))
         con.execute("UPDATE remesas SET estado='pagada', confirmado_por=?, confirmado_en=? WHERE id=?", (usuario, db.now_iso(), rid))
         db.audit(con, usuario, "confirmar_remesa", "remesa", rid, {"facturas": len(items), "fecha_pago": fecha_pago})
+    if db.get_setting(con, "correo_avisos_pago", "0") == "1":
+        try:
+            from . import correo
+            correo.avisos_de_remesa(con, rid, usuario)
+        except Exception:  # noqa: BLE001 - el aviso por correo nunca impide confirmar el pago
+            pass
     return len(items)
 
 
