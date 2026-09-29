@@ -31,10 +31,11 @@ def render():
         df["pagar"] = df["bloqueos"].map(lambda b: not b)
         df["importe"] = df["total_a_pagar_cents"] / 100
         df["bloqueo"] = df["bloqueos"].map(lambda b: "; ".join(b))
-        ed = st.data_editor(df[["pagar", "id", "fecha_vencimiento", "proveedor", "numero", "obra", "iban_n", "importe", "bloqueo"]], hide_index=True,
-                            width="stretch", key="pag_ed", disabled=["id", "fecha_vencimiento", "proveedor", "numero", "obra", "iban_n", "importe", "bloqueo"],
+        df["aviso"] = df.get("avisos", pd.Series([[]] * len(df))).map(lambda a: "; ".join(a or []))
+        ed = st.data_editor(df[["pagar", "id", "fecha_vencimiento", "proveedor", "numero", "obra", "iban_n", "importe", "bloqueo", "aviso"]], hide_index=True,
+                            width="stretch", key="pag_ed", disabled=["id", "fecha_vencimiento", "proveedor", "numero", "obra", "iban_n", "importe", "bloqueo", "aviso"],
                             column_config={"pagar": st.column_config.CheckboxColumn("Pagar"), "iban_n": "IBAN", "importe": eur_col("Líquido (€)"),
-                                           "bloqueo": "Bloqueo (no se puede pagar)"})
+                                           "bloqueo": "Bloqueo (no se puede pagar)", "aviso": "Aviso (revisar antes de pagar)"})
         sel = [int(r["id"]) for r in ed.to_dict("records") if r["pagar"]]
         tot = sum(Decimal(c["total_a_pagar_cents"]) for c in cands if c["id"] in sel) / 100
         a, b = st.columns([2, 1])

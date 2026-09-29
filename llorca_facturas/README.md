@@ -47,7 +47,10 @@ El principio es el que pide la propia Dirección de Llorca: **la máquina hace e
 | 📑 Certificaciones | Importación verificada del PDF, resumen por capítulos, explorador de las 681 partidas, comparación entre certificaciones, estructura de coste |
 | 🤝 Contratación | Ofertas por capítulo, comparativa con dispersión y venta prevista, adjudicación, opiniones y valoración, consumo de contratos |
 | 💬 Asistente IA | Preguntas en lenguaje natural sobre todo lo anterior |
-| 📥 🔍 🧾 ⚠️ | Circuito de facturas: entrada (IA, carpeta, ZIP o a mano), revisión con aprobación masiva de lo limpio, pagos, incidencias |
+| 📥 🔍 🧾 ⚠️ | Circuito de facturas: buzón de correo automático, entrada (IA, carpeta, ZIP o a mano), revisión con aprobación masiva de lo limpio, pagos, incidencias |
+| Ejecución de obra | Certificación a subcontratas, preparación de la certificación al cliente, planificación, planos y fichas técnicas, Seguridad y Salud, actas desde audio |
+| Finanzas | Conciliación bancaria, contabilidad en SIS por API, correo saliente |
+| Automatizaciones | Buzón, correo, SIS, copias de seguridad y estado de las tareas en segundo plano (administrador) |
 
 ## Fiabilidad frente a errores de uso
 
@@ -395,32 +398,62 @@ core/
   obra_control.py      certificaciones, estructura de coste, ofertas, rentabilidad, comparación, relación factura↔partida
   agente.py            asistente con herramientas deterministas
   export.py            Excel con formato contable
+  esquema.py           creación única de todas las tablas (app y pruebas)
+  planificador.py      tareas automáticas en segundo plano con turno en la base de datos
+  credenciales.py      contraseñas cifradas (Fernet) y OAuth2 de Microsoft 365
+  buzon.py             lectura IMAP del buzón, clasificación de adjuntos, aprendizaje del remitente
+  respaldo.py          copia de seguridad verificada, espejo de archivos, rotación y restauración
+  correo.py            bandeja de salida con aprobación y envío SMTP
+  sis.py               asientos a SIS por API REST (idempotente, modo prueba)
+  cert_proveedor.py    contratos, certificación a subcontratas y autorización de facturación
+  cert_cliente.py      propuesta de certificación al cliente desde lo medido a subcontratas
+  planificacion.py     calendario laboral, camino crítico, línea base y replanificación
+  planos.py            revisiones de planos y fichas, aprobación de la DF y distribución
+  prevencion.py        CAE, control de acceso y trazabilidad de residuos
+  conciliacion.py      Norma 43 / Excel y casación con remesas, pagos y cobros
+  actas_audio.py       transcripción local (Whisper) y paso al diario de obra
+  pdf_simple.py        PDF sin dependencias para los documentos que emite la app
 vistas/                una página Streamlit por módulo
 tests/                 casos reales verificados y prueba del núcleo
 demo/                  los 9 PDF reales de la demo
 data/                  base de datos y PDFs archivados (se crea al arrancar)
 ```
 
-Pruebas: `python tests/test_core.py` (facturas), `python tests/test_auditoria.py` (auditoría de agosto) y `python tests/test_obra.py` (certificación, encadenado, comparación, estructura, ofertas, rentabilidad). Usan los PDF de `demo/`.
+Pruebas automáticas: `python -m pytest` desde la carpeta de la aplicación. Se ejecutan solas en cada cambio (GitHub Actions,
+`.github/workflows/llorca-pruebas.yml`) y cubren buzón, copias, correo, SIS, certificación a subcontratas y al cliente,
+planificación, planos, CAE y residuos, conciliación, actas, tesorería, pagos SEPA, cierres y estudios, más un recorrido de todas
+las pantallas nuevas con tres cargos distintos. Cada prueba usa una base de datos nueva y documentos sintéticos.
+
+Los scripts con los documentos reales de la obra 664 (`tests/test_core.py`, `test_obra.py`, `test_auditoria.py`) se lanzan desde
+pytest si los PDF están en `demo/` (no se publican en el repositorio porque contienen NIF e IBAN de terceros; ver `demo/LEEME.md`).
 
 ## Datos, privacidad y dependencia de terceros
 
 - Con el motor local (por defecto) no se envía nada a ningún servicio externo: OCR, reglas, IA local y base de datos corren en el propio equipo.
-- Todo se guarda en local: `data/llorca_facturas.db` y `data/pdfs/`. Hay copia de seguridad consistente desde ⚙️ Configuración.
+- Todo se guarda en local: `data/llorca_facturas.db` y `data/pdfs/`. La copia de seguridad es automática y verificada (ver «Copia de seguridad automática»).
 - A la API de Anthropic solo se envía el PDF de cada factura para su lectura, más la lista de obras y partidas, y las preguntas del asistente junto con los resultados agregados de las consultas. Las condiciones de uso y retención de datos de la API están en https://www.anthropic.com/legal.
 - El modelo es configurable. El código, la base de datos y las reglas son de quien ejecuta la aplicación; si se deja de usar la IA, todo lo registrado sigue disponible y se puede seguir trabajando en modo manual.
 
 ## Limitaciones conocidas y siguientes pasos
 
-- **Usuarios**: la identificación es un nombre en la barra lateral, suficiente para trazabilidad interna. En producción: SSO o login con roles (administración aprueba, jefe de obra conforma).
-- **SIS Group**: no hay integración todavía. El Excel exportado sirve de puente; el siguiente paso natural es escribir el asiento por API de SIS tras la aprobación, que es lo que plantea la propuesta de J3.
-- **Buzón de correo**: la entrada es manual (subida o carpeta). Se puede añadir lectura IMAP del buzón de facturas.
 - **PDFs con varias facturas** en un mismo archivo: se extrae la factura principal y se listan los albaranes. Si un PDF agrupa varias facturas, conviene separarlo.
-- **Casación documental**: las certificaciones *de proveedor* y albaranes se registran como documentos soporte, pero aún no se casan automáticamente con cada factura.
 - **Venta prevista**: se deduce del % a origen. Las partidas con 0 % no aportan previsión. Si se dispone del presupuesto de contrato (BC3/Presto), conviene importarlo por capítulos en «Obras y partidas».
 - **Imputación a capítulo**: la clasificación automática es una propuesta (reglas + IA). Revísala en «Relacionar facturas» antes de sacar conclusiones de margen.
+- **Lectura**: el detalle de líneas sale en unas 60 de 87 facturas; el CIF que solo aparece en el logotipo y los escaneados siguen necesitando revisión la primera vez (después, el remitente del correo y el IBAN verificado identifican al proveedor).
+- **Fuera de este sistema**, por decisión: doble factor de acceso, paso a PostgreSQL (SQLite basta para una oficina) y los procesos de Administración que viven en A3 o Bizneo (flota, viajes, reconocimientos médicos, liquidaciones de apartamentos y hotel).
 
-## Novedades de esta versión (programa J3 completo, salvo la lectura automática del buzón)
+### Pendiente de comprobar en la instalación real
+
+Todo lo nuevo está probado con pruebas automáticas y servidores simulados, pero hay piezas que dependen de sistemas externos:
+
+- **Buzón**: conexión con el servidor real (Gmail con contraseña de aplicación, o Microsoft 365 con una aplicación registrada con el permiso `IMAP.AccessAsApp`). Botón «Probar conexión» en Automatizaciones.
+- **Correo saliente**: SMTP real. Empezar en modo PRUEBA (genera .eml) y pasar a real cuando los textos estén bien.
+- **SIS**: la API de SIS de cada instalación es distinta. Se envía un JSON con mapeo de campos configurable; hay que validarlo con el proveedor de SIS en modo PRUEBA (`data/sis_prueba/`) antes del modo real.
+- **Conciliación**: extracto Norma 43 real del banco (la lectura se verifica con los propios totales del fichero) y la remesa SEPA en el banco.
+- **Actas**: `faster-whisper` en el servidor (instalar.bat lo intenta); la primera transcripción descarga el modelo.
+- Los modelos de Ollama, la sesión recordada en un navegador de verdad, BC3 reales de Presto y el acceso desde otros equipos de la red.
+
+## Novedades de la versión 1.x (programa J3)
 
 ### Costes y ventas internos (solo uso interno; el cliente no los ve nunca)
 - **Qué recoge**: lo que no llega en factura de proveedor pero es coste o venta de la obra.
@@ -485,3 +518,84 @@ Pruebas: `python tests/test_core.py` (facturas), `python tests/test_auditoria.py
   - una factura no puede ir en dos remesas;
   - las facturas se marcan pagadas **solo al confirmar** que el banco ejecutó la remesa, y una remesa no enviada se puede anular.
   - El ordenante (nombre e IBAN) se configura en Configuración.
+
+## Novedades de la versión 2.0
+
+Principio de siempre: **la máquina hace el trabajo repetitivo y prepara; la persona valida y aprueba.** Nada sale hacia un
+proveedor, un cliente, el banco o SIS sin un circuito de aprobación configurable, y todo queda en la auditoría.
+
+### Buzón de facturas (lectura automática del correo)
+- Cada N minutos se leen los correos nuevos del buzón de facturas (IMAP; Gmail, Microsoft 365 con OAuth2 u otro servidor).
+- Adjuntos: PDF, fotos y escaneos, ZIP (también anidados) y correos reenviados (.eml/.msg). Se descartan logotipos y firmas.
+- **Solo entran las facturas**: cada PDF se clasifica por su contenido (dice «factura», base imponible, IVA, NIF de un tercero,
+  total…) y se descartan presupuestos, ofertas, proformas, albaranes, certificaciones a cliente, nóminas, planos o certificados
+  administrativos. Lo dudoso queda apartado para decidir con un clic, con el motivo de cada puntuación; y lo descartado se puede
+  importar si el clasificador se equivocó.
+- Las facturas entran igual que una subida manual (sin duplicados por huella) y se leen solas. El correo se marca como leído y,
+  si se desea, se mueve a una carpeta de procesados. El mismo correo nunca se procesa dos veces.
+- **Aprendizaje del remitente**: cuando se aprueba una factura llegada por correo, su remitente queda asociado al proveedor. Si la
+  siguiente factura no trae el CIF legible (solo en el logotipo, escaneados), el proveedor se toma del remitente o del IBAN verificado.
+
+### Copia de seguridad automática
+- Diaria (y opcionalmente cada N horas) a uno o varios destinos: otro disco, NAS o carpeta de red, carpeta sincronizada.
+- Base de datos: foto consistente aunque la app esté en uso, comprimida y **verificada** (integridad y recuentos) antes de darla por buena.
+- Archivos (PDF, justificantes, planos, audios): espejo incremental que nunca borra.
+- Rotación: últimas N diarias, semanales y mensuales. Aviso si la última copia correcta tiene más de un día, si falla un destino o
+  si todas las copias están en el mismo disco que los datos. Simulacro de restauración desde la pantalla y `restaurar_copia.py`.
+- La primera copia se hace nada más arrancar.
+
+### Correo saliente y escritura en SIS
+- **Bandeja de salida** con aprobación: reclamaciones de retenciones, peticiones de oferta con la separata adjunta, autorización de
+  facturación a subcontratas, avisos de pago al confirmar una remesa, documentación CAE pendiente. Se decide qué tipos salen solos.
+  Envío SMTP con reintentos; modo PRUEBA que genera .eml sin enviar.
+- **Asientos en SIS por API**: cada factura aprobada se envía una sola vez (referencia e `Idempotency-Key`). Si la factura cambia
+  después, queda «desfasada» para ajustarla en SIS. Modo PRUEBA, mapeo de campos configurable y el Excel/CSV de siempre como alternativa.
+- Contraseñas cifradas en la instalación (o en variables de entorno `LLORCA_BUZON_CLAVE`, `LLORCA_SMTP_CLAVE`, `LLORCA_SIS_CLAVE`).
+
+### Certificación a subcontratas y a cliente
+- Líneas de contrato de cada oferta adjudicada (desde Excel, desde el estudio de ofertas o a mano) con la partida del cliente que les corresponde.
+- **Certificación mensual al subcontratista**: la obra mide a origen o del mes; exceso sobre contrato solo con orden de cambio;
+  aprobación a cuatro ojos; PDF «Autorización de facturación» (base, retención, IVA o ISP, líquido) y correo preparado pidiendo la
+  factura por ese importe exacto.
+- Su factura **casa sola** con la certificación aprobada (casación triple) y lo aprobado sin factura es coste devengado.
+- **Preparar la certificación al cliente**: estructura y precios de la última certificación, avance de las subcontratas por
+  partida, nunca por debajo de lo ya certificado, ajustes manuales guardados, margen del mes (venta frente a coste de subcontratas),
+  Excel para SIS y comparación con la definitiva cuando se importa.
+
+### Planificación de obra
+- Actividades con duración en días laborables y dependencias FC/CC/FF con desfase; calendario con festivos y cierres; camino crítico.
+- Línea base del planning aprobado y **replanificación** con lo real a la fecha de control: qué actividades se mueven por cada
+  retraso, cuántos días, a quién avisar y cuánto se va el fin de obra. Gantt e importación desde Excel.
+
+### Planos y fichas técnicas
+- Revisiones con archivo y huella, estado (borrador, enviada a la DF, aprobada, con comentarios, rechazada, superada), quién de la
+  DF aprobó y justificante. «Vigente» = última aprobada; aviso si hay una posterior sin aprobar y de las copias entregadas de
+  revisiones superadas que hay que retirar de obra.
+
+### Seguridad y Salud
+- CAE: empresas por obra con alta, baja y nivel de subcontratación (máximo configurable, Ley 32/2006); trabajadores; documentación
+  exigida con caducidad y validación; correo a la empresa con lo que le falta.
+- Control de acceso por DNI/NIE con registro de entradas permitidas y denegadas y los motivos.
+- Opcional: aviso o bloqueo del pago a subcontratas sin certificado de estar al corriente con la AEAT (art. 43.1.f LGT).
+- Residuos: retiradas por código LER con albarán, factura (enlazada sola por el nº de albarán) y certificado del gestor;
+  trazabilidad completa o qué falta; comparación con el estudio de gestión de residuos.
+
+### Conciliación bancaria
+- Extractos Norma 43 (verificados con sus propios totales) o Excel/CSV del banco; sin duplicados aunque se solapen.
+- Un cargo igual a una remesa **confirma la remesa** y marca pagadas sus facturas (antes se hacía a mano); también pagos sueltos y
+  pagos detallados de una remesa. Los abonos registran el cobro de la factura emitida o de su retención.
+- Lo inequívoco se aplica solo; lo demás se propone con su confianza. Todo se puede deshacer.
+
+### Actas desde el audio de la reunión
+- Transcripción local con Whisper (el audio no sale de la oficina), resumen opcional con la IA local, propuesta de compromisos,
+  decisiones y extras con responsable, fecha e importe, y paso al diario de obra tras revisarlo.
+
+### Técnicas
+- **HTTPS**: `python generar_certificado.py` crea el certificado y `servidor.bat` arranca en https:// (cookie de sesión «Secure»).
+  Para internet: detrás de un proxy inverso con certificado público, sin abrir el puerto 8501.
+- **Pruebas automáticas** con pytest en cada cambio (ver «Arquitectura»). Han encontrado y corregido un fallo real: dos remesas
+  generadas en el mismo segundo chocaban por la referencia.
+- Compatibilidad con Python 3.11 además de 3.12.
+- Centro de alertas ampliado: copias, tareas automáticas con error, buzón, correos por aprobar o fallidos, asientos desfasados en SIS,
+  movimientos bancarios sin conciliar, certificaciones de subcontrata por aprobar, planning retrasado, planos sin respuesta de la DF,
+  CAE caducada y residuos sin certificado.

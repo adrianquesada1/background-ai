@@ -23,11 +23,25 @@ try {
 } catch { Aviso "No se pudo abrir el puerto 8501 en el cortafuegos. Ejecuta SERVIDOR como administrador una vez." }
 
 $ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254*" }).IPAddress
+
+# HTTPS: si existe el certificado (python generar_certificado.py), la app se sirve cifrada
+$crt = Join-Path $PSScriptRoot "certificados\servidor.crt"
+$key = Join-Path $PSScriptRoot "certificados\servidor.key"
+$extra = @()
+$proto = "http"
+if ((Test-Path $crt) -and (Test-Path $key)) {
+    $extra = @("--server.sslCertFile", $crt, "--server.sslKeyFile", $key)
+    $proto = "https"
+    OK "HTTPS activado con certificados\servidor.crt"
+} else {
+    Aviso "Sin HTTPS (solo red interna). Para cifrar: python generar_certificado.py"
+}
 Write-Host ""
 Write-Host "  Acceso desde cualquier equipo de la oficina:" -ForegroundColor Cyan
-foreach ($i in $ips) { Write-Host "     http://$($i):8501" -ForegroundColor Green }
-Write-Host "     http://$($env:COMPUTERNAME):8501" -ForegroundColor Green
+foreach ($i in $ips) { Write-Host "     $($proto)://$($i):8501" -ForegroundColor Green }
+Write-Host "     $($proto)://$($env:COMPUTERNAME):8501" -ForegroundColor Green
 Write-Host "  Deja esta ventana abierta. Para apagar el servidor: Ctrl + C" -ForegroundColor Yellow
+Write-Host "  Las tareas automaticas (buzon, copias, correo, SIS) solo funcionan mientras el servidor esta en marcha." -ForegroundColor Yellow
 Write-Host ""
-& "$ruta\python.exe" -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+& "$ruta\python.exe" -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true @extra
 Read-Host "El servidor se ha detenido. Pulsa Enter para salir"

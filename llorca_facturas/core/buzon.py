@@ -204,6 +204,27 @@ def adjuntos_de_mensaje(msg) -> list[tuple[str, bytes]]:
     return out
 
 
+MAX_ADJUNTO_MB = 60
+MAX_ZIP_DESCOMPRIMIDO_MB = 300
+
+
+def _adjunto_peligroso(nombre: str, data: bytes) -> str | None:
+    """El buzón recibe correo de cualquiera: se rechazan adjuntos enormes y ZIP que se inflan desmesuradamente."""
+    if len(data) > MAX_ADJUNTO_MB * 1024 * 1024:
+        return f"adjunto de más de {MAX_ADJUNTO_MB} MB"
+    if nombre.lower().endswith(".zip"):
+        import io
+        import zipfile
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                total = sum(i.file_size for i in z.infolist())
+                if total > MAX_ZIP_DESCOMPRIMIDO_MB * 1024 * 1024 or len(z.infolist()) > 500:
+                    return "ZIP desmesurado al descomprimir (posible bomba ZIP): no se abre"
+        except zipfile.BadZipFile:
+            return "ZIP dañado"
+    return None
+
+
 def procesar_mensaje(con, raw: bytes, uid: str = "", carpeta: str = "", cfg: dict | None = None, usuario: str = "buzón") -> dict:
     """Procesa un correo completo. Idempotente por Message-ID. Devuelve el resumen."""
     from . import ingesta, historial
@@ -238,6 +259,12 @@ def procesar_mensaje(con, raw: bytes, uid: str = "", carpeta: str = "", cfg: dic
     lote = historial.nuevo_lote()
     nuevos, n_adj, n_fact = [], 0, 0
     for fn, data in adjuntos_de_mensaje(msg):
+        motivo = _adjunto_peligroso(fn, data)
+        if motivo:
+            n_adj += 1
+            con.execute("INSERT INTO buzon_adjuntos (mensaje_id, nombre, clasificacion, motivos) VALUES (?,?,?,?)",
+                        (mid_db, fn, "error", json.dumps([motivo], ensure_ascii=False)))
+            continue
         for nombre_pdf, pdf in iter_pdfs_from_upload(fn, data):
             n_adj += 1
             h = sha256(pdf)
@@ -246,7 +273,12 @@ def procesar_mensaje(con, raw: bytes, uid: str = "", carpeta: str = "", cfg: dic
                 con.execute("INSERT INTO buzon_adjuntos (mensaje_id, nombre, sha256, clasificacion, puntuacion, motivos) VALUES (?,?,?,?,?,?)",
                             (mid_db, nombre_pdf, h, "error", None, json.dumps([err], ensure_ascii=False)))
                 continue
-            existente = db.one(con, "SELECT id FROM documentos WHERE file_hash=?", (h,))
+            existente = db.one(con, "SELECT id, buzon_mensaje_id FROM documentos WHERE file_hash=?", (h,))
+            if existente and existente["buzon_mensaje_id"] == mid_db:          # reintento de un correo que falló a medias
+                con.execute("INSERT INTO buzon_adjuntos (mensaje_id, nombre, sha256, clasificacion, documento_id) VALUES (?,?,?,?,?)",
+                            (mid_db, nombre_pdf, h, "factura", existente["id"]))
+                n_fact += 1
+                continue
             if existente:
                 con.execute("INSERT INTO buzon_adjuntos (mensaje_id, nombre, sha256, clasificacion, motivos, documento_id) VALUES (?,?,?,?,?,?)",
                             (mid_db, nombre_pdf, h, "duplicado", json.dumps(["el mismo PDF ya estaba registrado"], ensure_ascii=False),

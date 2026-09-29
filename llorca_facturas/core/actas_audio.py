@@ -48,7 +48,7 @@ def carpeta() -> Path:
 
 def motor_disponible() -> tuple[str | None, str]:
     try:
-        import faster_whisper  # noqa: F401
+        import faster_whisper  # noqa: F401  (solo se comprueba que está instalado)
         return "faster-whisper", "faster-whisper instalado"
     except ImportError:
         pass

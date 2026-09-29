@@ -372,7 +372,7 @@ def _lineas_detalle(texto: str) -> list[dict]:
     for i, ln in enumerate(lineas):
         ma = RE_ALBARAN.search(ln)
         if ma:
-            albaran_actual = f"{re.sub(r'\\s+', '', ma.group(1))} ({ma.group(2)})"
+            albaran_actual = re.sub(r"\s+", "", ma.group(1)) + f" ({ma.group(2)})"
         vals = _nums_linea(ln)
         if len(vals) < 2:
             continue

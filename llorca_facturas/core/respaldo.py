@@ -222,6 +222,12 @@ def copiar(con, cfg: dict | None = None, usuario: str = "copia automática") -> 
         rid = cur.lastrowid
         con.commit()
         try:
+            try:
+                dentro = raiz.resolve().is_relative_to(Path(DATA_DIR).resolve())
+            except (OSError, ValueError):
+                dentro = False
+            if dentro:
+                raise ValueError("El destino está dentro de la carpeta de datos: la copia se copiaría a sí misma. Elija otra carpeta.")
             raiz.mkdir(parents=True, exist_ok=True)
             gz = raiz / "bd" / f"llorca_{sello}.db.gz"
             esperados = foto_bd(con, gz)

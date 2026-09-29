@@ -12,7 +12,6 @@ transcripción de actas.
 from __future__ import annotations
 
 import threading
-import time
 import traceback
 import uuid
 from dataclasses import dataclass

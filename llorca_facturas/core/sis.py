@@ -103,7 +103,10 @@ def construir_payload(con, doc_id: int, cfg: dict | None = None) -> tuple[dict, 
 def sincronizar_cola(con, cfg: dict | None = None) -> dict:
     """Añade a la cola las facturas aprobadas nuevas y detecta las ya enviadas que han cambiado."""
     cfg = cfg or config(con)
-    desde = cfg["desde"] or date.today().isoformat()
+    desde = cfg["desde"]
+    if not desde:                  # se fija el primer día de uso: lo aprobado antes ya está contabilizado en SIS
+        desde = date.today().isoformat()
+        db.set_setting(con, "sis_desde", desde)
     nuevas = desfasadas = 0
     aprobadas = db.rows(con, """SELECT id FROM documentos WHERE estado='aprobada' AND tipo_documento IN ('factura','abono','anticipo')
                                 AND COALESCE(substr(aprobado_en,1,10), fecha) >= ? AND id NOT IN (SELECT documento_id FROM sis_envios)""", (desde,))

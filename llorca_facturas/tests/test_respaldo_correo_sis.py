@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from core import db, respaldo, correo, sis, planificador, ingesta, maestros
+from core import db, respaldo, correo, sis, planificador, ingesta
 
 
 # ============================================================================ copias
@@ -223,3 +223,19 @@ def test_planificador_turno_y_error(con):
     assert not planificador.ejecutar_ahora(con, "prueba_ok")["ok"]
     assert len(llamadas) == 1
     assert planificador.historial(con, "prueba_falla")[0]["ok"] == 0
+
+
+def test_destino_dentro_de_los_datos_se_rechaza(con, tmp_path, monkeypatch):
+    monkeypatch.setattr(respaldo, "DATA_DIR", tmp_path)
+    db.set_setting(con, "respaldo_destinos", str(tmp_path / "copias"))
+    with pytest.raises(RuntimeError, match="dentro de la carpeta de datos"):
+        respaldo.copiar(con)
+
+
+def test_alertas_de_los_modulos_nuevos(con, obra):
+    from core import alertas
+    correo.preparar(con, "otro", "a@b.es", "x", "y", "t")
+    con.execute("INSERT INTO sis_envios (documento_id, estado) VALUES (1, 'desfasado')")
+    con.commit()
+    textos = " | ".join(a["texto"] for a in alertas.calcular(con, "admin", None))
+    assert "esperan aprobación" in textos and "cambiaron después de contabilizarse" in textos and "copia" in textos

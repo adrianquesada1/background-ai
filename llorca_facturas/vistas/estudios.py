@@ -95,6 +95,23 @@ def render():
                                                 "remitan su mejor oferta rellenando la columna de precio unitario e indicando plazo, forma de "
                                                 "pago, validez y exclusiones.\n\nGracias.\n")
                     st.link_button("Abrir correo a estos industriales (adjunte la separata)", f"mailto:?bcc={mails}&subject={asunto}&body={cuerpo}")
+                    if editar and st.button("Enviar la separata por correo a cada industrial", type="primary",
+                                            help="Un correo por empresa con su separata adjunta, en «Correo saliente» para aprobar."):
+                        from core import correo as _correo
+                        from core.config import DATA_DIR
+                        n = 0
+                        for s_ in db.rows(con, "SELECT id, empresa, email FROM estudio_solicitudes WHERE estudio_id=? AND oficio=? AND email<>''", (eid, of)):
+                            carpeta = DATA_DIR / "estudios" / str(eid)
+                            carpeta.mkdir(parents=True, exist_ok=True)
+                            ruta = carpeta / f"separata_{of}_{s_['empresa']}.xlsx".replace(" ", "_").replace("/", "-")
+                            ruta.write_bytes(E.separata_excel(con, eid, of, s_["empresa"]))
+                            try:
+                                _correo.preparar(con, "peticion_oferta", s_["email"], f"Petición de oferta · {e['nombre']} · {of}",
+                                                 urllib.parse.unquote(cuerpo), usuario(), adjuntos=[ruta], origen="estudio_solicitud", origen_id=s_["id"])
+                                n += 1
+                            except ValueError as ex:
+                                st.error(f"{s_['empresa']}: {ex}")
+                        st.success(f"{n} correo(s) preparados en «Correo saliente».")
 
     with tabs[2]:
         sols = db.rows(con, "SELECT * FROM estudio_solicitudes WHERE estudio_id=? ORDER BY oficio, empresa", (eid,))

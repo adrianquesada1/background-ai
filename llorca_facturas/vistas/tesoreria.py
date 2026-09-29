@@ -145,6 +145,22 @@ def render():
             c1.download_button("Descargar reclamación", texto, file_name=f"reclamacion_retencion_{sel}.txt")
             if admin and c2.button("Registrar que se ha reclamado", key=f"tes_reg_{sel}"):
                 T.seguimiento(con, sel, None, "Reclamación de retención", "", "Enviada reclamación", None, usuario(), "retencion"); st.rerun()
+            if admin:
+                c3, c4 = st.columns([2, 1])
+                para = c3.text_input("Correo del cliente", key=f"tes_mail_{sel}", placeholder="administracion@cliente.es")
+                if c4.button("Enviar por correo", key=f"tes_env_{sel}", help="Queda en «Correo saliente» para aprobarlo y sale solo."):
+                    from core import correo as _correo
+                    try:
+                        lineas = texto.splitlines()
+                        asunto = lineas[0].replace("Asunto:", "").strip() if lineas and lineas[0].startswith("Asunto:") else "Devolución de retención de garantía"
+                        cuerpo = "\n".join(lineas[1:]).strip() if lineas and lineas[0].startswith("Asunto:") else texto
+                        _correo.preparar(con, "reclamacion_retencion", para, asunto, cuerpo, usuario(), origen="factura_emitida", origen_id=sel,
+                                         evitar_duplicado=False)
+                        T.seguimiento(con, sel, None, "Reclamación de retención", para, "Reclamación preparada para envío por correo", None, usuario(),
+                                      "retencion")
+                        st.success("Preparado en «Correo saliente»."); st.rerun()
+                    except ValueError as ex:
+                        st.error(str(ex))
 
     with tabs[3]:
         saldo = st.text_input("Saldo bancario de hoy (€)", "0", key="tes_saldo")

@@ -323,7 +323,8 @@ def render():
     st.dataframe(aud, hide_index=True, width="stretch", height=320)
 
     st.subheader("Copia de seguridad")
-    st.caption(f"Base de datos: `{DB_PATH}` · PDFs originales en `{Path(DB_PATH).parent / 'pdfs'}`")
+    st.caption(f"Base de datos: `{DB_PATH}` · PDFs originales en `{Path(DB_PATH).parent / 'pdfs'}`. La copia AUTOMÁTICA (diaria, verificada y "
+               "en otro disco o NAS) se configura en «Automatizaciones → Copias de seguridad». Aquí se descarga una copia puntual.")
     if st.button("Generar copia de la base de datos"):
         tmp = Path(tempfile.gettempdir()) / "llorca_backup.db"
         if tmp.exists():

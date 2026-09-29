@@ -26,9 +26,22 @@ OK "Entorno en $ruta"
 
 Titulo "3/4  Comprobando librerias"
 Activar-Entorno $ruta
-& "$ruta\python.exe" -c "import streamlit, pandas, plotly, openpyxl, rapidfuzz, pdfplumber, pypdfium2, rapidocr_onnxruntime, requests, chromadb; print('  todas las librerias cargan bien')"
+& "$ruta\python.exe" -c "import streamlit, pandas, plotly, openpyxl, rapidfuzz, pdfplumber, pypdfium2, rapidocr_onnxruntime, requests, chromadb, cryptography; print('  todas las librerias cargan bien')"
 if ($LASTEXITCODE -ne 0) { Fallo "Alguna libreria no carga. Haz una captura de esta ventana." }
 OK "Librerias correctas (incluido el OCR local)"
+
+# Transcripcion local de actas (opcional): si falla, la app funciona igual y las actas se hacen desde notas escritas
+& "$ruta\python.exe" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('faster_whisper') else 1)"
+if ($LASTEXITCODE -eq 0) { OK "Transcripcion local de actas (faster-whisper) instalada" }
+else {
+    Write-Host "  Instalando la transcripcion local de actas (faster-whisper)..." -ForegroundColor Gray
+    try {
+        & "$ruta\python.exe" -m pip install --quiet --disable-pip-version-check "faster-whisper>=1.0"
+        $okW = ($LASTEXITCODE -eq 0)
+    } catch { $okW = $false }
+    if ($okW) { OK "Transcripcion local de actas instalada (el modelo se descarga la primera vez que se usa)" }
+    else { Aviso "No se pudo instalar faster-whisper: las actas desde audio no estaran disponibles (el resto funciona igual)." }
+}
 
 Titulo "4/4  IA local (Ollama) - opcional"
 # Carpeta de modelos: se respeta la que ya exista; si apunta a una carpeta que ya no existe, se usa la de este proyecto

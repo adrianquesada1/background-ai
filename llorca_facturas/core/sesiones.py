@@ -105,5 +105,6 @@ def js_cookie(token: str | None, segundos: int = 0) -> str:
         valor = f"{COOKIE}={token}; max-age={segundos}; path=/; SameSite=Lax"
     else:
         valor = f"{COOKIE}=; max-age=0; path=/; SameSite=Lax"
-    return ("<script>try{window.parent.document.cookie=%r;}catch(e){}try{document.cookie=%r;}catch(e){}</script>"
-            % (valor, valor))
+    # con HTTPS la cookie se marca «Secure»: nunca viaja sin cifrar
+    return ("<script>var s=(window.parent.location.protocol==='https:'||location.protocol==='https:')?'; Secure':'';"
+            "try{window.parent.document.cookie=%r+s;}catch(e){}try{document.cookie=%r+s;}catch(e){}</script>" % (valor, valor))

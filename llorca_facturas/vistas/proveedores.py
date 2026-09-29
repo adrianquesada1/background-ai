@@ -28,6 +28,23 @@ def render():
                  column_config={"Base": eur_col("Base facturada (€)"), "Ret. garantía": eur_col("Ret. garantía (€)"),
                                 "nif_ok": st.column_config.CheckboxColumn("NIF válido"), "n_ibans": "Nº IBAN",
                                 "docs": "Docs"})
+    with st.expander("Correos de contacto (avisos de pago, autorizaciones de facturación, CAE)"):
+        st.caption("Si no se indica, se usa el remitente habitual de sus facturas en el buzón.")
+        mails = pd.DataFrame(db.rows(con, "SELECT id, nombre, email, email_administracion FROM proveedores ORDER BY nombre"))
+        ed_m = st.data_editor(mails, hide_index=True, width="stretch", key="prov_mails", disabled=["id", "nombre"],
+                              column_config={"id": None, "nombre": "Proveedor", "email": "Correo general", "email_administracion": "Correo de administración"})
+        if st.button("Guardar correos"):
+            from core.correo import validar_direcciones
+            malos = [r["nombre"] for r in ed_m.fillna("").to_dict("records") if validar_direcciones(r["email"]) or validar_direcciones(r["email_administracion"])]
+            if malos:
+                st.error("Correo no válido en: " + ", ".join(malos))
+            else:
+                with db.tx(con):
+                    for r in ed_m.fillna("").to_dict("records"):
+                        con.execute("UPDATE proveedores SET email=?, email_administracion=? WHERE id=?",
+                                    (r["email"].strip() or None, r["email_administracion"].strip() or None, r["id"]))
+                    db.audit(con, usuario(), "correos_proveedores", "proveedor", None, None)
+                st.success("Guardado.")
     multi = prov[prov["n_ibans"] > 1]
     if not multi.empty:
         st.warning(f" {len(multi)} proveedor(es) han usado más de una cuenta bancaria: "

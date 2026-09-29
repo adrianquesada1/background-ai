@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import db, maestros, obra_control, auditoria, usuarios, trabajos, sesiones
+from core import db, maestros, usuarios, trabajos
 from core.config import MODELOS_CLAUDE, ESTADO_LABEL, SEVERIDAD_ICONO
 
 EUR = st.column_config.NumberColumn  # alias corto
@@ -14,32 +14,13 @@ EUR = st.column_config.NumberColumn  # alias corto
 
 @st.cache_resource
 def get_con():
+    from core import esquema, planificador
     con = db.connect()
-    db.init_db(con)
-    obra_control.init(con)
-    auditoria.init(con)
-    usuarios.init(con)
-    sesiones.init(con)
-    trabajos.init(con)
-    from core import ingesta as _ing, plantillas as _pl
-    _ing._cols_extra(con)
-    _pl.init(con)
-    from core import historial as _hi, indice as _ix, gobierno as _gob
-    _hi.init(con)
-    _ix.init(con)
-    _gob.init(con)
-    from core import internos as _int, tesoreria as _tes, estudios as _est
-    _int.init(con)
-    _tes.init(con)
-    _est.init(con)
-    from core import cierres as _cie, pagos as _pag
-    _cie.init(con)
-    _pag.init(con)
-    con.commit()
+    esquema.inicializar(con)
     from core import agente as _ag
     _ag.init_chat(con)
     trabajos.arrancar()
-    maestros.seed_inicial(con)
+    planificador.arrancar()          # buzón, copias, correo, SIS y transcripciones en segundo plano
     return con
 
 

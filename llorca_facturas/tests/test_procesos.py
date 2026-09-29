@@ -1,7 +1,6 @@
 """Procesos nuevos: certificación a proveedor, preparación de la certificación al cliente, planificación, planos,
 seguridad y salud, conciliación bancaria y actas desde audio."""
 import io
-import json
 from datetime import date
 from decimal import Decimal
 

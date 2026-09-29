@@ -23,11 +23,11 @@ import io
 import json
 import re
 import unicodedata
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from . import db
-from .money import parse_amount, fmt_eur
+from .money import parse_amount
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS banco_extractos (
@@ -157,7 +157,6 @@ def leer_tabla(data: bytes, nombre: str) -> dict:
     c_abono = buscar("ABONO", "HABER", "INGRESO")
     c_conc = buscar("CONCEPTO", "DESCRIPCION", "DETALLE", "MOVIMIENTO")
     c_ref = buscar("REFERENCIA", "DOCUMENTO")
-    c_saldo = buscar("SALDO")
     if not c_fecha or not (c_imp or (c_cargo and c_abono)):
         raise ValueError("No encuentro las columnas de fecha e importe (o cargo y abono) en la hoja.")
 

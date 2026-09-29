@@ -13,3 +13,6 @@ extract-msg>=0.48
 
 chromadb>=1.0,<2
 numpy>=1.26
+cryptography>=41
+# Opcional: transcripción local de actas (instalar.bat lo intenta; si falla, la app funciona igual)
+# faster-whisper>=1.0

@@ -1,8 +1,6 @@
 """Buzón de facturas: clasificación de adjuntos, procesado de correos, idempotencia y conexión IMAP simulada."""
 from email.message import EmailMessage
 
-import pytest
-
 from core import buzon, db
 from core.pdf_simple import pdf_de_texto
 
@@ -151,3 +149,19 @@ def test_tarea_registrada_en_planificador(con):
     assert "buzon" not in planificador.pendientes(con)                     # desactivado por defecto
     db.set_setting(con, "buzon_activo", "1")
     assert "buzon" in planificador.pendientes(con)
+
+
+def test_zip_desmesurado_no_se_abre(con, obra):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("grande.pdf", b"\0" * (buzon.MAX_ZIP_DESCOMPRIMIDO_MB * 1024 * 1024 + 10))
+    m = EmailMessage()
+    m["From"] = "x@y.es"
+    m["Message-ID"] = "<zip@p>"
+    m.set_content("zip")
+    m.add_attachment(buf.getvalue(), maintype="application", subtype="zip", filename="facturas.zip")
+    r = buzon.procesar_mensaje(con, bytes(m), "9", "INBOX")
+    a = db.one(con, "SELECT clasificacion, motivos FROM buzon_adjuntos WHERE mensaje_id=?", (r["mensaje_id"],))
+    assert a["clasificacion"] == "error" and "bomba" in a["motivos"]

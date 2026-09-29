@@ -27,7 +27,8 @@ st.set_page_config(page_title="Llorca Group · Control económico de obra", page
 
 from vistas import comun  # noqa: E402
 from vistas import (panel, ingesta, revision, documentos, obras, proveedores, incidencias, asistente, ajustes,  # noqa: E402
-                    inicio, certificaciones, rentabilidad, contratacion, auditoria, buscar, deshacer, pendientes, avales, gobierno, informes, internos, tesoreria, estudios, casacion, mando, cierre, pagos)
+                    inicio, certificaciones, rentabilidad, contratacion, auditoria, buscar, deshacer, pendientes, avales, gobierno, informes, internos, tesoreria, estudios, casacion, mando, cierre, pagos,
+                    buzon, correo_salida, sis_envios, conciliacion, automatizaciones, cert_proveedor, cert_cliente, planificacion, planos, prevencion, actas)
 from core import db  # noqa: E402
 
 from vistas import estilo  # noqa: E402
@@ -42,7 +43,8 @@ con = comun.get_con()
 import re as _re  # noqa: E402
 _PERSISTIR = _re.compile(r"^(buscar_q|ing_modo_ia|ing_obra_subida|ing_forzar|chat_redactar|panel_(obra|desde|hasta|alc|part_det|hp)|doc_(obra|est|tipo|txt)|rev_(estados|sel)|aud_(obra|cert)|"
                          r"inc_obra|ing_(modo|obra_lote)|cert_(obra|res|exp|q|estr)|cmp_(a|b|pid)|con_obra|rent_obra|ini_obra|"
-                         r"int_(obra|tipo|f_tipo|f_est|ver_anul)|cie_obra|pag_obra|tes_(obra|saldo)|est_sel|cas_obra|aud_crit_q|aud_dev|obras_sel|obras_vista|of_(est|prov|desde|hasta)|gob_obra|inf_(obra|cert|dest)|aval_obra|chat_redactar)$")
+                         r"int_(obra|tipo|f_tipo|f_est|ver_anul)|cie_obra|pag_obra|tes_(obra|saldo)|est_sel|cas_obra|aud_crit_q|aud_dev|obras_sel|obras_vista|of_(est|prov|desde|hasta)|gob_obra|inf_(obra|cert|dest)|aval_obra|chat_redactar|"
+                         r"buz_(filtro|obra)|cp_(obra|of)|ccl_(obra|per|solo)|pl_obra|pn_obra|pv_obra|act_obra|cs_vista|sis_f)$")
 for _k in list(st.session_state.keys()):
     if isinstance(_k, str) and _PERSISTIR.match(_k):
         try:
@@ -104,32 +106,49 @@ P = {
     "obras": st.Page(obras.render, title="Obras y partidas", icon=":material/apartment:", url_path="obras"),
     "proveedores": st.Page(proveedores.render, title="Proveedores", icon=":material/business:", url_path="proveedores"),
     "ajustes": st.Page(ajustes.render, title="Configuración y auditoría", icon=":material/settings:", url_path="ajustes"),
+    "buzon": st.Page(buzon.render, title="Buzón de facturas", icon=":material/mail:", url_path="buzon"),
+    "correo": st.Page(correo_salida.render, title="Correo saliente", icon=":material/outgoing_mail:", url_path="correo"),
+    "sis": st.Page(sis_envios.render, title="Contabilidad en SIS", icon=":material/account_tree:", url_path="sis"),
+    "conciliacion": st.Page(conciliacion.render, title="Conciliación bancaria", icon=":material/compare_arrows:", url_path="conciliacion"),
+    "automatizaciones": st.Page(automatizaciones.render, title="Automatizaciones", icon=":material/schedule:", url_path="automatizaciones"),
+    "cert_proveedor": st.Page(cert_proveedor.render, title="Certificación a subcontratas", icon=":material/assignment_turned_in:", url_path="cert-subcontratas"),
+    "cert_cliente": st.Page(cert_cliente.render, title="Preparar certificación al cliente", icon=":material/edit_document:", url_path="preparar-certificacion"),
+    "planificacion": st.Page(planificacion.render, title="Planificación", icon=":material/view_timeline:", url_path="planificacion"),
+    "planos": st.Page(planos.render, title="Planos y fichas técnicas", icon=":material/architecture:", url_path="planos"),
+    "prevencion": st.Page(prevencion.render, title="Seguridad y Salud", icon=":material/health_and_safety:", url_path="seguridad"),
+    "actas": st.Page(actas.render, title="Actas desde audio", icon=":material/mic:", url_path="actas"),
 }
 st.session_state["_paginas"] = P
 st.session_state["_pagina_revision"] = P["revision"]
 
 CONTROL = [P["auditoria"], P["rentabilidad"], P["panel"], P["internos"], P["certificaciones"], P["contratacion"], P["gobierno"],
            P["informes"], P["asistente"]]
-CIRCUITO = [P["ingesta"], P["revision"], P["documentos"], P["casacion"], P["incidencias"], P["deshacer"]]
-FINANZAS = [P["tesoreria"], P["pagos"], P["cierre"], P["avales"], P["mando"]]
+EJECUCION = [P["cert_proveedor"], P["cert_cliente"], P["planificacion"], P["planos"], P["prevencion"], P["actas"]]
+CIRCUITO = [P["buzon"], P["ingesta"], P["revision"], P["documentos"], P["casacion"], P["incidencias"], P["deshacer"]]
+FINANZAS = [P["tesoreria"], P["pagos"], P["conciliacion"], P["cierre"], P["avales"], P["sis"], P["correo"], P["mando"]]
 if ROL == "admin":
-    secciones = {"": [P["inicio"], P["pendientes"], P["buscar"]], "Control de obra": CONTROL, "Circuito de facturas": CIRCUITO,
-                 "Tesorería y finanzas": FINANZAS, "Estudios": [P["estudios"]], "Maestros": [P["obras"], P["proveedores"], P["ajustes"]]}
+    secciones = {"": [P["inicio"], P["pendientes"], P["buscar"]], "Control de obra": CONTROL, "Ejecución de obra": EJECUCION,
+                 "Circuito de facturas": CIRCUITO, "Tesorería y finanzas": FINANZAS, "Estudios": [P["estudios"]],
+                 "Maestros": [P["obras"], P["proveedores"], P["automatizaciones"], P["ajustes"]]}
 elif ROL in ("gestor", "direccion"):
-    secciones = {"": [P["inicio"], P["pendientes"], P["buscar"]], "Control de obra": CONTROL, "Circuito de facturas": CIRCUITO,
-                 "Tesorería y finanzas": FINANZAS, "Estudios": [P["estudios"]], "Maestros": [P["obras"], P["proveedores"]]}
+    secciones = {"": [P["inicio"], P["pendientes"], P["buscar"]], "Control de obra": CONTROL, "Ejecución de obra": EJECUCION,
+                 "Circuito de facturas": CIRCUITO, "Tesorería y finanzas": FINANZAS, "Estudios": [P["estudios"]],
+                 "Maestros": [P["obras"], P["proveedores"]]}
 elif ROL == "jefe_obra":        # solo sus obras
     secciones = {"": [P["inicio"], P["pendientes"], P["buscar"]],
                  "Mis obras": [P["auditoria"], P["rentabilidad"], P["panel"], P["internos"], P["certificaciones"], P["contratacion"],
                                P["gobierno"], P["informes"], P["asistente"]],
-                 "Facturas": [P["revision"], P["documentos"], P["incidencias"]]}
+                 "Ejecución de obra": EJECUCION,
+                 "Facturas": [P["revision"], P["documentos"], P["incidencias"], P["correo"]]}
 elif ROL == "tecnico":
     secciones = {"": [P["inicio"], P["buscar"]], "Estudios": [P["estudios"]],
                  "Control de obra": [P["certificaciones"], P["contratacion"], P["gobierno"], P["rentabilidad"], P["panel"], P["asistente"]],
+                 "Ejecución de obra": [P["cert_cliente"], P["planificacion"], P["planos"], P["prevencion"], P["actas"]],
                  "Maestros": [P["obras"]]}
 else:                           # consulta: solo lectura
     secciones = {"": [P["inicio"], P["buscar"]],
                  "Control de obra": [P["auditoria"], P["rentabilidad"], P["panel"], P["certificaciones"], P["asistente"]],
+                 "Ejecución de obra": [P["planificacion"], P["planos"]],
                  "Documentos": [P["documentos"]]}
 
 # --------------------------------------------------------------------------- preferencias del usuario
@@ -145,7 +164,7 @@ else:
     comun.usuarios.guardar_preferencias(con, _uid, {k: v for k, v in st.session_state.items()
                                                     if isinstance(k, str) and _PERSISTIR.match(k)})
 
-nav = st.navigation(secciones, expanded=20)
+nav = st.navigation(secciones, expanded=True)
 sesiones.registrar_pagina(con, st.session_state.get("_token"), nav.title)
 
 with st.sidebar:
