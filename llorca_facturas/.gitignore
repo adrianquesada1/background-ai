@@ -1,0 +1,13 @@
+data/
+__pycache__/
+.streamlit/secrets.toml
+# documentos reales de terceros: no se publican
+demo/*.pdf
+demo/*.xlsx
+# certificados HTTPS (clave privada)
+certificados/
+*.pem
+*.key
+.pytest_cache/
+# transcripción de facturas reales (NIF, IBAN de terceros)
+tests/casos_reales.py
